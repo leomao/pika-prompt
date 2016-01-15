@@ -36,9 +36,10 @@
 [[ -z "${PROMPT_COLOR_HOST}" ]] && PROMPT_COLOR_HOST=242
 [[ -z "${PROMPT_COLOR_SYMBOL}" ]] && PROMPT_COLOR_SYMBOL=magenta
 [[ -z "${PROMPT_COLOR_SYMBOL_E}" ]] && PROMPT_COLOR_SYMBOL_E=red
-[[ -z "${PROMPT_COLOR_VIMCMD}" ]] && PROMPT_COLOR_VIMCMD=118
-[[ -z "${PROMPT_COLOR_VIMVIS}" ]] && PROMPT_COLOR_VIMVIS=yellow
-[[ -z "${PROMPT_COLOR_VIMREP}" ]] && PROMPT_COLOR_VIMREP=red
+[[ -z "${PROMPT_COLOR_VIMCMD}" ]] && PROMPT_COLOR_VIMCMD=69
+[[ -z "${PROMPT_COLOR_VIMINS}" ]] && PROMPT_COLOR_VIMINS=119
+[[ -z "${PROMPT_COLOR_VIMVIS}" ]] && PROMPT_COLOR_VIMVIS=214
+[[ -z "${PROMPT_COLOR_VIMREP}" ]] && PROMPT_COLOR_VIMREP=203
 
 # turns seconds into human readable time
 # 165392 => 1d 21h 56m 32s
@@ -267,9 +268,9 @@ prompt_pika_async_callback() {
 
 prompt_pika_setup_prompt() {
   PROMPT="$terminfo[cud1]"
-  PROMPT+="$preprompt  $prompt_mode$terminfo[cud1]"
+  PROMPT+="$preprompt$terminfo[cud1]"
 	# prompt turns red if the previous command didn't exit with 0
-  PROMPT+="%(?.%F{$PROMPT_COLOR_SYMBOL}.%F{$PROMPT_COLOR_SYMBOL_E})${PIKA_PROMPT_SYMBOL:-❯}%f "
+  PROMPT+=" $prompt_mode %(?.%F{$PROMPT_COLOR_SYMBOL}.%F{$PROMPT_COLOR_SYMBOL_E})${PIKA_PROMPT_SYMBOL:-❯}%f "
 }
 
 prompt_pika_setup() {
@@ -304,28 +305,28 @@ prompt_pika_setup() {
 	[[ $UID -eq 0 ]] && prompt_pika_username=' %F{white}%n%f%F{242}@%m%f'
 
 	prompt_pika_setup_prompt
-	vi-mode-info() {
-		case $KEYMAP in
-			main|viins)
-				prompt_mode=""
-				;;
-			vicmd)
-				prompt_mode="%F{$PROMPT_COLOR_VIMCMD}-- NORMAL --%f"
-				;;
-			visual|vivis)
-				prompt_mode="%F{$PROMPT_COLOR_VIMVIS}-- VISUAL --%f"
-				;;
-			virep)
-				prompt_mode="%F{$PROMPT_COLOR_VIMREP}-- REPLACE --%f"
-				;;
-		esac
-		prompt_pika_setup_prompt
-		zle .reset-prompt
-	}
-	zle -N vi-mode-info
-	add-zle-hook zle-line-init vi-mode-info
-	add-zle-hook zle-line-finish vi-mode-info
-	add-zle-hook zle-keymap-select vi-mode-info
+	if (( $+functions[add-vi-mode-hook] )); then
+		vi-mode-info() {
+			case $1 in
+				"i")
+					prompt_mode="%B%F{$PROMPT_COLOR_VIMINS}I%f%b"
+					;;
+				"n")
+					prompt_mode="%B%F{$PROMPT_COLOR_VIMCMD}N%f%b"
+					;;
+				"v"|"V")
+					prompt_mode="%B%F{$PROMPT_COLOR_VIMVIS}V%f%b"
+					;;
+				"r")
+					prompt_mode="%B%F{$PROMPT_COLOR_VIMREP}R%f%b"
+					;;
+			esac
+			prompt_pika_setup_prompt
+			zle .reset-prompt
+		}
+		zle -N vi-mode-info
+		add-vi-mode-hook vi-mode-info
+	fi
 }
 
 prompt_pika_setup "$@"
