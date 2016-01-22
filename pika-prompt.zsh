@@ -25,6 +25,7 @@
 # \e[2K => clear everything on the current line
 
 # default color settings
+[[ -z "${PROMPT_COLOR_VENV}" ]] && PROMPT_COLOR_VENV=87
 [[ -z "${PROMPT_COLOR_PWD}" ]] && PROMPT_COLOR_PWD=blue
 [[ -z "${PROMPT_COLOR_GIT}" ]] && PROMPT_COLOR_GIT=242
 [[ -z "${PROMPT_COLOR_GIT_DIRTY}" ]] && PROMPT_COLOR_GIT_DIRTY=red
@@ -134,8 +135,10 @@ prompt_pika_update_prompt() {
 	# check that no command is currently running, the preprompt will otherwise be rendered in the wrong place
   #[[ -n ${prompt_pika_cmd_timestamp+x} && "$1" != "precmd" ]] && return
 
-	# construct preprompt, beginning with path
-	preprompt="%F{$PROMPT_COLOR_PWD}%~%f"
+	# construct preprompt
+	preprompt=""
+	[[ -n $VIRTUAL_ENV ]] && preprompt+="%F{$PROMPT_COLOR_VENV}($(basename $VIRTUAL_ENV)) %f"
+	preprompt+="%F{$PROMPT_COLOR_PWD}%~%f"
 	# git info
   preprompt+="%F{$PROMPT_COLOR_GIT}${vcs_info_msg_0_}%f"
   preprompt+="%F{$PROMPT_COLOR_GIT_DIRTY}${prompt_pika_git_dirty}${prompt_pika_git_dirty_checking}%f"
@@ -270,7 +273,7 @@ prompt_pika_setup_prompt() {
   PROMPT="$terminfo[cud1]"
   PROMPT+="$preprompt$terminfo[cud1]"
 	# prompt turns red if the previous command didn't exit with 0
-  PROMPT+=" $prompt_mode %(?.%F{$PROMPT_COLOR_SYMBOL}.%F{$PROMPT_COLOR_SYMBOL_E})${PIKA_PROMPT_SYMBOL:-❯}%f "
+  PROMPT+="$prompt_mode%(?.%F{$PROMPT_COLOR_SYMBOL}.%F{$PROMPT_COLOR_SYMBOL_E})${PIKA_PROMPT_SYMBOL:-❯}%f "
 }
 
 prompt_pika_setup() {
@@ -309,16 +312,16 @@ prompt_pika_setup() {
 		vi-mode-info() {
 			case $1 in
 				"i")
-					prompt_mode="%B%F{$PROMPT_COLOR_VIMINS}I%f%b"
+					prompt_mode="%B%F{$PROMPT_COLOR_VIMINS} I %f%b"
 					;;
 				"n")
-					prompt_mode="%B%F{$PROMPT_COLOR_VIMCMD}N%f%b"
+					prompt_mode="%B%F{$PROMPT_COLOR_VIMCMD} N %f%b"
 					;;
 				"v"|"V")
-					prompt_mode="%B%F{$PROMPT_COLOR_VIMVIS}V%f%b"
+					prompt_mode="%B%F{$PROMPT_COLOR_VIMVIS} V %f%b"
 					;;
 				"r")
-					prompt_mode="%B%F{$PROMPT_COLOR_VIMREP}R%f%b"
+					prompt_mode="%B%F{$PROMPT_COLOR_VIMREP} R %f%b"
 					;;
 			esac
 			prompt_pika_setup_prompt
