@@ -74,7 +74,7 @@ prompt_pika_check_git_arrows() {
 	# reset git arrows
 	prompt_pika_git_arrows=
 
-	[[ -n $working_tree ]] || return
+	[[ -n $prompt_pika_current_working_tree ]] || return
 
 	# check if there is an upstream configured for this branch
 	command git rev-parse --abbrev-ref @'{u}' &>/dev/null || return
@@ -95,7 +95,7 @@ prompt_pika_check_git_arrows() {
 	[[ -n $arrows ]] && prompt_pika_git_arrows=" ${arrows}"
 
 	if (( ${prompt_pika_git_fetching} )); then
-		prompt_pika_git_arrows+=" ${PIKA_GIT_FETCH_SYMBOL:-↻ }"
+		prompt_pika_git_arrows+=" ${PIKA_GIT_FETCHING_SYMBOL:-↻ }"
 	fi
 }
 
@@ -149,14 +149,12 @@ prompt_pika_update_prompt() {
 	# execution time
 	preprompt+="%F{$PROMPT_COLOR_EXECTIME}${prompt_pika_cmd_exec_time}%f"
 
+	[[ "${prompt_pika_last_preprompt}" != "${preprompt}" ]] || return
 	# perform fancy terminal editing only for update
-  if [[ "$1" != "precmd" ]]; then
-    # only redraw if preprompt has changed
-    [[ "${prompt_pika_last_preprompt}" != "${preprompt}" ]] || return
-
-    prompt_pika_setup_prompt
-    zle && zle .reset-prompt
-  fi
+	if [[ "$1" != "precmd" ]]; then
+		prompt_pika_setup_prompt
+		zle && zle .reset-prompt
+	fi
 
 	# store previous preprompt for comparison
 	prompt_pika_last_preprompt=$preprompt
@@ -165,9 +163,6 @@ prompt_pika_update_prompt() {
 prompt_pika_precmd() {
 	# check exec time and store it in a variable
 	prompt_pika_check_cmd_exec_time
-
-	# check for git arrows
-	prompt_pika_check_git_arrows
 
 	# shows the full path in the title
 	prompt_pika_set_title 'expand-prompt' '%~'
@@ -178,8 +173,8 @@ prompt_pika_precmd() {
 	# preform async git dirty check and fetch
 	prompt_pika_async_tasks
 
-	# print the preprompt
-	prompt_pika_update_prompt
+	# update the prompt
+	prompt_pika_update_prompt precmd
 }
 
 # fastest possible way to check if repo is dirty
@@ -239,7 +234,6 @@ prompt_pika_async_tasks() {
 	fi
 
 	prompt_pika_check_git_arrows
-	prompt_pika_update_prompt
 
 	# only perform tasks inside git working tree
 	[[ -n $working_tree ]] || return
