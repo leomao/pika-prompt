@@ -131,6 +131,34 @@ prompt_pika_string_length_to_var() {
 	typeset -g "${var}"="${length}"
 }
 
+prompt_pika_truncate_pwd() {
+	# n = number of directories to show in full (n = 3, /a/b/c/dee/ee/eff)
+	n=${PIKA_TRUNCATE_PWD_NUM:-4}
+	path=$(pwd | sed -e "s,^$HOME,~,")
+
+	# split our path on /
+	dirs=("${(s:/:)path}")
+	dirs_length=$#dirs
+
+	if [[ $dirs_length -ge $n ]]; then
+		# we have more dirs than we want to show in full, so compact those down
+		((max=dirs_length - n))
+		for (( i = 1; i <= $max; i++ )); do
+			step="$dirs[$i]"
+			if [[ -z $step ]]; then
+				continue
+			fi
+			if [[ $step =~ "^\." ]]; then
+				dirs[$i]=$step[0,2] # .mydir => .m
+			else
+				dirs[$i]=$step[0,1] # mydir => m
+			fi
+		done
+	fi
+
+	echo ${(j:/:)dirs}
+}
+
 prompt_pika_update_prompt() {
 	# check that no command is currently running, the preprompt will otherwise be rendered in the wrong place
   #[[ -n ${prompt_pika_cmd_timestamp+x} && "$1" != "precmd" ]] && return
@@ -138,7 +166,7 @@ prompt_pika_update_prompt() {
 	# construct preprompt
 	preprompt=""
 	[[ -n $VIRTUAL_ENV ]] && preprompt+="%F{$PROMPT_COLOR_VENV}($(basename $VIRTUAL_ENV)) %f"
-	preprompt+="%F{$PROMPT_COLOR_PWD}%~%f"
+	preprompt+="%F{$PROMPT_COLOR_PWD}$(prompt_pika_truncate_pwd)%f"
 	# git info
   preprompt+="%F{$PROMPT_COLOR_GIT}${vcs_info_msg_0_}%f"
   preprompt+="%F{$PROMPT_COLOR_GIT_DIRTY}${prompt_pika_git_dirty}${prompt_pika_git_dirty_checking}%f"
