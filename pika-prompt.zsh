@@ -180,6 +180,7 @@ prompt_pika_update_prompt() {
 	[[ "${prompt_pika_last_preprompt}" != "${(S%%)preprompt}" ]] || return
 	# perform fancy terminal editing only for update
 	if [[ "$1" != "precmd" ]]; then
+		prompt_pika_setup_prompt
 		zle && zle .reset-prompt
 	fi
 
@@ -291,10 +292,10 @@ prompt_pika_async_callback() {
 }
 
 prompt_pika_setup_prompt() {
-	PROMPT='$terminfo[cud1]'
-  PROMPT+='$preprompt$terminfo[cud1]'
+	PROMPT="$terminfo[cud1]"
+  PROMPT+="$preprompt$terminfo[cud1]"
 	# prompt turns red if the previous command didn't exit with 0
-  PROMPT+='$prompt_mode%(?.%F{$PROMPT_COLOR_SYMBOL}.%F{$PROMPT_COLOR_SYMBOL_E})${PIKA_PROMPT_SYMBOL:-❯}%f '
+  PROMPT+="$prompt_mode%(?.%F{$PROMPT_COLOR_SYMBOL}.%F{$PROMPT_COLOR_SYMBOL_E})${PIKA_PROMPT_SYMBOL:-❯}%f "
 }
 
 prompt_pika_setup() {
@@ -346,6 +347,7 @@ prompt_pika_setup() {
 					prompt_mode="%B%F{$PROMPT_COLOR_VIMREP} R %f%b"
 					;;
 			esac
+			prompt_pika_setup_prompt
 			zle .reset-prompt
 		}
 		zle -N vi-mode-info
