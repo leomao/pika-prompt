@@ -38,9 +38,9 @@
 [[ -z "${PROMPT_COLOR_SYMBOL}" ]] && PROMPT_COLOR_SYMBOL=magenta
 [[ -z "${PROMPT_COLOR_SYMBOL_E}" ]] && PROMPT_COLOR_SYMBOL_E=red
 [[ -z "${PROMPT_COLOR_VIMCMD}" ]] && PROMPT_COLOR_VIMCMD=69
-[[ -z "${PROMPT_COLOR_VIMINS}" ]] && PROMPT_COLOR_VIMINS=119
 [[ -z "${PROMPT_COLOR_VIMVIS}" ]] && PROMPT_COLOR_VIMVIS=214
 [[ -z "${PROMPT_COLOR_VIMREP}" ]] && PROMPT_COLOR_VIMREP=203
+[[ -z "${PROMPT_COLOR_VIMINS}" ]] && PROMPT_COLOR_VIMINS=119
 
 # turns seconds into human readable time
 # 165392 => 1d 21h 56m 32s
@@ -68,6 +68,15 @@ prompt_pika_check_cmd_exec_time() {
 	(( elapsed > ${PIKA_CMD_MAX_EXEC_TIME:=5} )) && {
 		prompt_pika_human_time_to_var $elapsed "prompt_pika_cmd_exec_time"
 	}
+}
+
+prompt_pika_clear_screen() {
+	# enable output to terminal
+	zle -I
+	# clear screen and move cursor to (0, 0)
+	print -n '\e[2J\e[0;0H'
+	# print preprompt
+	prompt_pika_render_preprompt precmd
 }
 
 prompt_pika_check_git_arrows() {
@@ -159,7 +168,62 @@ prompt_pika_truncate_pwd() {
 	echo ${(j:/:)dirs}
 }
 
-prompt_pika_update_prompt() {
+prompt_pika_update_preprompt() {
+	# only redraw if the expanded preprompt has changed
+	[[ "${prompt_pika_last_preprompt[2]}" != "${(S%%)preprompt}" ]] || return
+
+	# store the current prompt_subst setting so that it can be restored later
+	local prompt_subst_status=$options[prompt_subst]
+
+	# make sure prompt_subst is unset to prevent parameter expansion in preprompt
+	setopt local_options no_prompt_subst
+
+	# calculate length of preprompt and store it locally in preprompt_length
+	integer preprompt_length lines
+	prompt_pika_string_length_to_var "${preprompt}" "preprompt_length"
+
+	# calculate number of preprompt lines for redraw purposes
+	(( lines = ( preprompt_length - 1 ) / COLUMNS + 1 ))
+
+	# calculate previous preprompt lines to figure out how the new preprompt should behave
+	integer last_preprompt_length last_lines
+	prompt_pika_string_length_to_var "${prompt_pika_last_preprompt[1]}" "last_preprompt_length"
+	(( last_lines = ( last_preprompt_length - 1 ) / COLUMNS + 1 ))
+
+	# clr_prev_preprompt erases visual artifacts from previous preprompt
+	local clr_prev_preprompt
+	if (( last_lines > lines )); then
+		# move cursor up by last_lines, clear the line and move it down by one line
+		clr_prev_preprompt="\e[${last_lines}A\e[2K\e[1B"
+		while (( last_lines - lines > 1 )); do
+			# clear the line and move cursor down by one
+			clr_prev_preprompt+='\e[2K\e[1B'
+			(( last_lines-- ))
+		done
+
+		# move cursor into correct position for preprompt update
+		clr_prev_preprompt+="\e[${lines}B"
+		# create more space for preprompt if new preprompt has more lines than last
+	elif (( last_lines < lines )); then
+		# move cursor using newlines because ansi cursor movement can't push the cursor beyond the last line
+		printf $'\n'%.0s {1..$(( lines - last_lines ))}
+	fi
+
+	# disable clearing of line if last char of preprompt is last column of terminal
+	local clr='\e[K'
+	(( COLUMNS * lines == preprompt_length )) && clr=
+
+	# modify previous preprompt
+	print -Pn "${clr_prev_preprompt}\e[${lines}A\e[${COLUMNS}D${preprompt}${clr}\n"
+
+	if [[ $prompt_subst_status = 'on' ]]; then
+		# re-eanble prompt_subst for expansion on PS1
+		setopt prompt_subst
+	fi
+}
+
+prompt_pika_render_preprompt() {
+
 	# check that no command is currently running, the preprompt will otherwise be rendered in the wrong place
   #[[ -n ${prompt_pika_cmd_timestamp+x} && "$1" != "precmd" ]] && return
 
@@ -177,10 +241,11 @@ prompt_pika_update_prompt() {
 	# execution time
 	preprompt+="%F{$PROMPT_COLOR_EXECTIME}${prompt_pika_cmd_exec_time}%f"
 
-	[[ "${prompt_pika_last_preprompt}" != "${(S%%)preprompt}" ]] || return
 	# perform fancy terminal editing only for update
-	if [[ "$1" != "precmd" ]]; then
-		prompt_pika_setup_prompt
+	if [[ "$1" == "precmd" ]]; then
+		print -P "\n${preprompt}"
+	else
+		prompt_pika_update_preprompt
 		zle && zle .reset-prompt
 	fi
 
@@ -202,17 +267,18 @@ prompt_pika_precmd() {
 	prompt_pika_async_tasks
 
 	# update the prompt
-	prompt_pika_update_prompt precmd
+	prompt_pika_render_preprompt precmd
 }
 
 # fastest possible way to check if repo is dirty
 prompt_pika_async_git_dirty() {
-	local untracked_dirty=$1; shift
+	setopt localoptions noshwordsplit
+	local untracked_dirty=$1; dir=$2
 
 	# use cd -q to avoid side effects of changing directory, e.g. chpwd hooks
-	builtin cd -q "$*"
+	builtin cd -q $dir
 
-	if [[ "$untracked_dirty" == "0" ]]; then
+	if [[ $untracked_dirty = 0 ]]; then
 		command git diff --no-ext-diff --quiet --exit-code
 	else
 		test -z "$(command git status --porcelain --ignore-submodules -unormal)"
@@ -222,11 +288,12 @@ prompt_pika_async_git_dirty() {
 }
 
 prompt_pika_async_git_fetch() {
+	setopt localoptions noshwordsplit
 	# use cd -q to avoid side effects of changing directory, e.g. chpwd hooks
-	builtin cd -q "$*"
+	builtin cd -q $1
 
 	# disable auth prompting for git fetch (git 2.3+)
-	SSH_ASKPASS=0 GIT_TERMINAL_PROMPT=0 command git -c gc.auto=0 fetch
+	SSH_ASKPASS=0 GIT_TERMINAL_PROMPT=0 command git -c gc.auto=0 fetch &> /dev/null
 }
 
 prompt_pika_async_tasks() {
@@ -281,29 +348,28 @@ prompt_pika_async_callback() {
 		prompt_pika_async_git_dirty)
 			unset prompt_pika_git_dirty_checking
 			prompt_pika_git_dirty=$output
-			prompt_pika_update_prompt
+			prompt_pika_render_preprompt
 			;;
 		prompt_pika_async_git_fetch)
 			unset prompt_pika_git_fetching
 			prompt_pika_check_git_arrows
-			prompt_pika_update_prompt
+			prompt_pika_render_preprompt
 			;;
 	esac
 }
 
 prompt_pika_setup_prompt() {
-	PROMPT="$terminfo[cud1]"
-  PROMPT+="$preprompt$terminfo[cud1]"
 	# prompt turns red if the previous command didn't exit with 0
-  PROMPT+="$prompt_mode%(?.%F{$PROMPT_COLOR_SYMBOL}.%F{$PROMPT_COLOR_SYMBOL_E})${PIKA_PROMPT_SYMBOL:-❯}%f "
+  PROMPT="$prompt_mode%(?.%F{$PROMPT_COLOR_SYMBOL}.%F{$PROMPT_COLOR_SYMBOL_E})${PIKA_PROMPT_SYMBOL:-❯}%f "
 }
 
 prompt_pika_setup() {
 	setopt promptpercent
-	setopt promptsubst
 
 	zmodload zsh/datetime
 	zmodload zsh/zle
+	zmodload zsh/parameter
+
 	autoload -Uz add-zsh-hook
 	autoload -Uz vcs_info
 	autoload -Uz async && async
@@ -319,6 +385,13 @@ prompt_pika_setup() {
 	# vcs_info_msg_1_ = 'x%R' git top level (%R), x-prefix prevents creation of a named path (AUTO_NAME_DIRS)
 	zstyle ':vcs_info:git*' formats ' %b' 'x%R'
 	zstyle ':vcs_info:git*' actionformats ' %b|%a' 'x%R'
+
+	# if the user has not registered a custom zle widget for clear-screen,
+	# override the builtin one so that the preprompt is displayed correctly when
+	# ^L is issued.
+	if [[ $widgets[clear-screen] == 'builtin' ]]; then
+		zle -N clear-screen prompt_pika_clear_screen
+	fi
 
 	# show username@host if logged in through SSH
 	if [[ "$SSH_CONNECTION" != '' ]]; then
