@@ -426,6 +426,13 @@ prompt_pika_setup() {
 		zle -N vi-mode-info
 		add-vi-mode-hook vi-mode-info
 	fi
+
+	# register custom reset-prompt
+	reset-prompt() {
+		prompt_pika_render_preprompt
+		zle .reset-prompt
+	}
+	zle -N reset-prompt
 }
 
 prompt_pika_setup "$@"
