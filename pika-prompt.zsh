@@ -321,7 +321,7 @@ prompt_pika_async_tasks() {
 		prompt_pika_current_working_tree="x${working_tree}"
 
 		# do not preform git fetch if it is disabled or working_tree == HOME
-		if (( ${PIKA_GIT_FETCH:-1} )) && [[ -n $working_tree ]]; then
+		if (( ${PIKA_GIT_FETCH:-0} )) && [[ -n $working_tree ]]; then
 			# tell worker to do a git fetch
 			prompt_pika_git_fetching=1
 			async_job "prompt_pika" prompt_pika_async_git_fetch "${working_tree}"
