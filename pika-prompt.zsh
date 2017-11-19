@@ -113,7 +113,7 @@ prompt_pika_truncate_pwd() {
 
 	# split our path on /
 	local pwd_dirs=("${(s:/:)pwd_path}")
-	local dirs_length=$#dirs
+	local dirs_length=$#pwd_dirs
 
 	if [[ $dirs_length -ge $n ]]; then
 		# we have more dirs than we want to show in full, so compact those down
@@ -124,9 +124,9 @@ prompt_pika_truncate_pwd() {
 				continue
 			fi
 			if [[ $step =~ "^\." ]]; then
-				dirs[$i]=$step[0,2] # .mydir => .m
+				pwd_dirs[$i]=$step[0,2] # .mydir => .m
 			else
-				dirs[$i]=$step[0,1] # mydir => m
+				pwd_dirs[$i]=$step[0,1] # mydir => m
 			fi
 		done
 	fi
@@ -146,7 +146,7 @@ prompt_pika_preprompt_render() {
 	fi
 
 	# Set the path.
-	preprompt_parts+=("%F{$PROMPT_COLOR_PWD}"'%~%f')
+	preprompt_parts+=("%F{$PROMPT_COLOR_PWD}"'$(prompt_pika_truncate_pwd)%f')
 
 	# Add git branch and dirty status info.
 	typeset -gA prompt_pika_vcs_info
