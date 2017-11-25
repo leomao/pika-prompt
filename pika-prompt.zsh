@@ -356,7 +356,7 @@ prompt_pika_async_refresh() {
 	async_job "prompt_pika" prompt_pika_async_git_arrows $PWD
 
 	# do not preform git fetch if it is disabled or working_tree == HOME
-	if (( ${PIKA_GIT_PULL:-0} )) && [[ $working_tree != $HOME ]]; then
+	if (( ${PIKA_GIT_PULL:-$pika_git_pull_default} )) && [[ $working_tree != $HOME ]]; then
 		# tell worker to do a git fetch
 		async_job "prompt_pika" prompt_pika_async_git_fetch $PWD
 	fi
@@ -383,7 +383,8 @@ prompt_pika_check_git_arrows() {
 
 prompt_pika_async_callback() {
 	setopt localoptions noshwordsplit
-	local job=$1 code=$2 output=$3 exec_time=$4
+	local job=$1 code=$2 output=$3 exec_time=$4 next_pending=$6
+	local do_render=0
 
 	case $job in
 		prompt_pika_async_vcs_info)
@@ -414,7 +415,7 @@ prompt_pika_async_callback() {
 			prompt_pika_vcs_info[branch]=$info[branch]
 			prompt_pika_vcs_info[top]=$info[top]
 
-			prompt_pika_preprompt_render
+			do_render=1
 			;;
 		prompt_pika_async_git_aliases)
 			if [[ -n $output ]]; then
@@ -430,7 +431,7 @@ prompt_pika_async_callback() {
 				typeset -g prompt_pika_git_dirty=${PIKA_GIT_DIRTY:-"±"}
 			fi
 
-			[[ $prev_dirty != $prompt_pika_git_dirty ]] && prompt_pika_preprompt_render
+			[[ $prev_dirty != $prompt_pika_git_dirty ]] && do_render=1
 
 			# When prompt_pika_git_last_dirty_check_timestamp is set, the git info is displayed in a different color.
 			# To distinguish between a "fresh" and a "cached" result, the preprompt is rendered before setting this
@@ -445,7 +446,7 @@ prompt_pika_async_callback() {
 				prompt_pika_check_git_arrows ${(ps:\t:)output}
 				if [[ $prompt_pika_git_arrows != $REPLY ]]; then
 					typeset -g prompt_pika_git_arrows=$REPLY
-					prompt_pika_preprompt_render
+					do_render=1
 				fi
 			elif (( code != 99 )); then
 				# Unless the exit code is 99, prompt_pika_async_git_arrows
@@ -453,11 +454,19 @@ prompt_pika_async_callback() {
 				# upstream configured.
 				if [[ -n $prompt_pika_git_arrows ]]; then
 					unset prompt_pika_git_arrows
-					prompt_pika_preprompt_render
+					do_render=1
 				fi
 			fi
 			;;
 	esac
+
+	if (( next_pending )); then
+		(( do_render )) && typeset -g prompt_pika_async_render_requested=1
+		return
+	fi
+
+	[[ ${prompt_pika_async_render_requested:-$do_render} = 1 ]] && prompt_pika_preprompt_render
+	unset prompt_pika_async_render_requested
 }
 
 prompt_pika_setup() {
@@ -493,11 +502,12 @@ prompt_pika_setup() {
 		prompt_pika_username+="%F{$PROMPT_COLOR_HOST}%m%f"
 	fi
 
+	typeset -g pika_git_pull_default=0
 	# show username@host if root, with username in white
 	# Also disable auto fetching
 	if [[ $UID -eq 0 ]]; then
 		prompt_pika_username='%F{white}%n%f%F{242}@%m%f'
-		export PIKA_GIT_PULL=0
+		typeset -g pika_git_pull_default=0
 	fi
 
 	typeset -g prompt_pika_mode
